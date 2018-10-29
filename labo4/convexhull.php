@@ -20,35 +20,6 @@ class Coord {
   }
 }
 
-class ConvexHull {
-  compute(...points){
-    return null;
-  }
-}
-
-function dotProduct(a,b){
-  return (a.lat*b.lat)+(a.lon*b.lon);
-}
-
-// >0 : P0 is more north then P1
-// <0 : P0 is more south then P1
-function isNorth(P0,P1){
-  return P0.lat - P1.lat;
-}
-
-// >0 : P0 is more east then P1
-// <0 : P0 is more west then P1
-function isEast(P0,P1){
-  return P0.lon - P1.lon;
-}
-
-// >0 : P2 left of line through P0,P1
-// =0 : P2 on line
-// <0 : P2 right of line though P0,P1
-function isLeft(P0, P1, P2) {
-    return (P1.lon() - P0.lon()) * (P2.lat() - P0.lat()) - (P2.lon() - P0.lon()) * (P1.lat() - P0.lat());
-}
-
 var convexhull = new function() {
 	// Returns a new array of points representing the convex hull from an array of points
 	this.makeHull = function(points) {
