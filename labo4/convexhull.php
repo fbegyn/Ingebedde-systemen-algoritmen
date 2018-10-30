@@ -90,17 +90,21 @@ var convexhull = new function() {
 // Throw Exceptions if this is not the case.
 function validJSONRealtimeParking(json){
     try{
-      if !(json.hasOwnProperty("latitude")){
-        throw "Latitude is missing from the JSOn object.";
-      }
-      if !(json.hasOwnProperty("longitude")){
-        throw "Longitude is missing from the JSOn object.";
-      }
-      if !(json.hasOwnProperty("availableCapacity")){
-        throw "AvailableCapacity is missing from the JSOn object.";
-      }
-      if !(json.hasOwnProperty("totalCapacity")){
-        throw "TotalCapacity is missing from the JSOn object.";
+      for(var i = 0; i< json.length;i++){
+        if (json[i].hasOwnProperty("latitude")==false){
+          throw "latitude is missing.";
+        }
+        if (json[i].hasOwnProperty("longitude")==false){
+          throw "longitude is missing.";
+        }
+        if (json[i].hasOwnProperty("parkingStatus")==false){
+          if (json[i].parkingStatus.hasOwnProperty("availableCapacity")==false){
+            throw "availableCapacity is missing.";
+          }
+        }
+        if (json[i].hasOwnProperty("totalCapacity")==false){
+          throw "totalcapacity is missing.";
+        }
       }
     	return true;
     }
@@ -115,6 +119,7 @@ function loadParkingData(){
   xhttp.onreadystatechange = function() {
     if (this.readyState == 4 && this.status == 200) {
       jsonparking = JSON.parse(this.responseText);
+      validJSONRealtimeParking(jsonparking);
 
       // Draw all parkings on the map
       // green => available (parkingStatus -> open == true and availableCapacity/totalCapacity >= 25%)
