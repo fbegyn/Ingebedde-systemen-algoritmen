@@ -64,7 +64,32 @@ function distance($lat1,$lon1,$lat2,$lon2){
 
 class Node{
   public $id;
-  public $passed = 0;
+  function getNeighs(){
+    $this->neighs = getNeighbours($this->id);
+  }
+}
+
+function getCoord($path){
+  $coords = [];
+	foreach($path as $step){
+    array_push($coords,getNode($step)); 
+  }
+  return $coords;
+}
+
+function getNode($id){
+  global $mysqli;
+  $sql = "SELECT id,lat,lon,name FROM cities
+          WHERE id=$id";
+  $result = $mysqli->query($sql);
+  while ($result && $row = $result->fetch_assoc()) {
+    $node = new Node;
+    $node->lat = (float)$row['lat'];
+    $node->lon = (float)$row['lon'];
+    $node->id = $row['id'];
+    $node->name = $row['name'];
+  }
+  return $node;
 }
 
 function getNodeId($from_lat, $from_lon){
@@ -75,13 +100,13 @@ function getNodeId($from_lat, $from_lon){
           WHERE lat < $from_lat+$offset AND lat > $from_lat-$offset
           AND lon < $from_lon+$offset AND lon > $from_lon-$offset";
   $result = $mysqli->query($sql);
-  $closest = 10000000;
+  $closest = INF;
   $closeNode = new Node;
   $nodes = [];
   while ($result && $row = $result->fetch_assoc()) {
     $node = new Node;
-    $node->lat = $row['lat'];
-    $node->lon = $row['lon'];
+    $node->lat = (float)$row['lat'];
+    $node->lon = (float)$row['lon'];
     $node->id = $row['id'];
     $node->name = $row['name'];
     array_push($nodes,$node);
@@ -96,16 +121,29 @@ function getNodeId($from_lat, $from_lon){
 }
 
 // Get all neighbour nodes for current node
-function getNeighbours($nodeId){
+function getNeighbours($nodeId, $transport){
   global $mysqli;
-  // Fetch all neighbours from the database
-  $sql = "SELECT * FROM city_connections
-          WHERE node_id = $nodeId";
+  // Fetch all neighbours from the database with matching transport
+  switch ($transport){
+  case "foot":
+    $sql = "SELECT * FROM city_connections
+            WHERE node_id = $nodeId
+            AND access_walk = 1";
+  case "bicycle":
+    $sql = "SELECT * FROM city_connections
+            WHERE node_id = $nodeId
+            AND access_bike = 1";
+  case "car":
+    $sql = "SELECT * FROM city_connections
+            WHERE node_id = $nodeId
+            AND access_drive = 1";
+  }
   $result = $mysqli->query($sql);
-  $nodes = [];
+  $nodes= [];
   while ($result && $row = $result->fetch_assoc()) {
     $node = new Node;
-    $node->id = $row['neighbour_id'];
+    $node->to = $row['neighbour_id'];
+    $node->id = $row['node_id'];
     $node->distance = $row['distance'];
     $node->access_walk = $row['access_walk'];
     $node->access_bike = $row['access_bike'];
@@ -115,51 +153,85 @@ function getNeighbours($nodeId){
   return $nodes;
 }
 
+function getVerteces($transport){
+  global $mysqli;
+  // Fetch all neighbours from the database
+  switch ($transport){
+  case "foot":
+    $sql = "SELECT DISTINCT node_id FROM city_connections
+            WHERE access_walk = 1";
+  case "bicycle":
+    $sql = "SELECT DISTINCT node_id FROM city_connections
+            WHERE access_bike = 1";
+  case "car":
+    $sql = "SELECT DISTINCT node_id FROM city_connections
+            WHERE access_drive = 1";
+  }
+  $result = $mysqli->query($sql);
+  $nodes = [];
+  while ($result && $row = $result->fetch_assoc()) {
+    $node = new Node;
+    $node->id = $row['node_id'];
+    array_push($nodes,$node);
+  }
+  return $nodes;
+}
+
 function getShortestPathDijkstra($from_node, $to_node, $transport){
   global $mysqli;
   // Variable initialisation
-  $matrix = array(array());
-  $curNode = new Node;
-  $curNode->id = $from_node;
-  $curNode->distance = 0;
-  $close = new Node;
-  $close->distance = 10000000;
-  // Path variable
+  $dist = [];
+  $prev = [];
   $path = [];
-  array_push($path,$from_node);
-  // Search untill we reach the to_node
-  while($curNode->id <> $to_node){
-    $neighs = getNeighbours($curNode->id);
-    foreach( $neighs as $neigh ){
-      if ($neigh->id == $curNode->id){
+  $verteces = getVerteces($transport);
+
+  // Build cost matrix and set distances from source to $vertex to INF
+  foreach($verteces as $vertex){
+    $dist[$vertex->id] = INF;
+  }
+  // Set source -> source to 0 cost
+  $dist[$from_node] = 0;
+  
+  // Searching for the paths
+  while (empty($verteces) == false){
+    // Find minimal distance in subset of verteces
+    $u;
+    $min = INF;
+    foreach ($verteces as $node){
+      if ($dist[$node->id] < $min){
+        $u = $node->id;
+      }
+    }
+
+    // unset vertex matched from u
+    for($i = 0; $i < count($verteces); $i++){
+      if ($verteces[$i]->id == $u){
+        array_splice($verteces,$i,1);
         break;
       }
-      $matrix[$curNode->id][$neigh->id] = new Node;
-      $matrix[$curNode->id][$neigh->id]->distance = $curNode->distance + $neigh->distance;
-      $matrix[$curNode->id][$neigh->id]->id = $neigh->id;
     }
-    foreach($matrix as $a){
-      foreach($a as $b){
-        if (($b->distance < $close->distance) && ($b->passed==0) && ($b->id <> $from_node)){
-          $close = $b;
-        }
+
+    // Fetch neighbours
+    $neighs = getNeighbours($u,$transport);
+    // Start looking at the neighbours of the node
+    foreach ($neighs as $neigh){
+      $alt = $dist[$u] + $neigh->distance;
+      if ($alt < $dist[$neigh->to]){
+        $dist[$neigh->to] = $alt;
+        $prev[$neigh->to] = $u;
       }
     }
-    $curNode = $close;
-    array_push($path,$curNode->id);
-    //if (end($path) == $from_node){
-    //  $temp = end($path);
-    //  $path = [];
-    //  array_push($path,$temp);
-    //}
-    $close->passed=1;
-    $close = clone($close);
-    $close->distance=100000;
   }
-  print_r($matrix);
+  // Determine path
+  $t = $to_node;
+  while (isset($prev[$t])){
+    array_push($path, $t);
+    $t = $prev[$t];
+  }
+  array_push($path,$from_node);
+  $path = array_reverse($path);
 
-  $distance = $curNode->distance;
-  return array($distance, $path);
+  return array($dist[$to_node], $path);
 }
 
 function json_dijkstra($from_lat, $from_lon, $to_lat, $to_lon, $transport){
@@ -171,6 +243,7 @@ function json_dijkstra($from_lat, $from_lon, $to_lat, $to_lon, $transport){
   // which throws an error if no path could be found -> avoid that your algorithm visits all nodes in the database
 
   list($distance,$path) = getShortestPathDijkstra($from_node, $to_node, $transport); // complete implementation in func.php
+  $coords = getCoord($path);
 
   // throw new Exception("Error: ...");
 
@@ -178,6 +251,7 @@ function json_dijkstra($from_lat, $from_lon, $to_lat, $to_lon, $transport){
       "from_node" => $from_node,
       "to_node" => $to_node,
       "path" => $path,
+      "loc" => $coords,
       "distance" => $distance
   );
 
