@@ -13,7 +13,7 @@ try{
   if(isset($_GET['to_lon'])) $to_lon = $_GET['to_lon']; else throw new Exception("Input Error: to_lon not set", 4);
   if(isset($_GET['transport'])) $transport = $_GET['transport']; else throw new Exception("Input Error: transport not set", 5);
 
-  //checkLonLat($from_lat, $from_lon, $to_lat, $to_lon); // check for out of bound
+  checkLonLat($from_lat, $from_lon, $to_lat, $to_lon); // check for out of bound
 
   echo json_dijkstra($from_lat, $from_lon, $to_lat, $to_lon, $transport);
 }

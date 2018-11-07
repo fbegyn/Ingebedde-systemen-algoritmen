@@ -10,8 +10,8 @@ uncomment and fill in the right data
 */
 
 $servername = "localhost";
-$username = "project15";
-$password = "project15";
-$dbname = "project15";
+$username = "project4";
+$password = "project4";
+$dbname = "project4";
 
 ?>

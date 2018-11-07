@@ -62,229 +62,88 @@ function distance($lat1,$lon1,$lat2,$lon2){
   return (($delta_lat * $delta_lat) + ($delta_lon * $delta_lon));
 }
 
-class Node{
-  public $id;
-  function getNeighs(){
-    $this->neighs = getNeighbours($this->id);
-  }
-}
-
-function getCoord($path){
-  $coords = [];
-	foreach($path as $step){
-    array_push($coords,getNode($step)); 
-  }
-  return $coords;
-}
-
-function getNode($id){
-  global $mysqli;
-  $sql = "SELECT id,lat,lon,name FROM cities
-          WHERE id=$id";
-  $result = $mysqli->query($sql);
-  while ($result && $row = $result->fetch_assoc()) {
-    $node = new Node;
-    $node->lat = (float)$row['lat'];
-    $node->lon = (float)$row['lon'];
-    $node->id = $row['id'];
-  //  $node->name = $row['name'];
-  }
-  return $node;
-}
-
 function getNodeId($from_lat, $from_lon, $transport){
   // find the closest node_id to ($from_lat, $from_lon) on a way
   global $mysqli;
   $offset = 0.5;
   switch ($transport){
   case "foot":
-    $sql = "SELECT * FROM city_connections AS a
-            RIGHT JOIN cities AS b
-            ON a.node_id = b.id
-            WHERE access_walk = 1
-            AND lat < $from_lat+$offset AND lat > $from_lat-$offset
-            AND lon < $from_lon+$offset AND lon > $from_lon-$offset";
+    $sql = "SELECT id, (lat-{$from_lat})*(lat-{$from_lat}) + (lon - {$from_lon})*(lon - {$from_lon}) AS x FROM osm_nodes
+           	WHERE lat < $from_lat+$offset AND lat > $from_lat-$offset
+            AND lon < $from_lon+$offset AND lon > $from_lon-$offset
+						ORDER BY x ASC LIMIT 1";
   case "bicycle":
-    $sql = "SELECT * FROM city_connections AS a
-            RIGHT JOIN cities AS b
-            ON a.node_id = b.id
-            WHERE access_bike = 1
-            AND lat < $from_lat+$offset AND lat > $from_lat-$offset
-            AND lon < $from_lon+$offset AND lon > $from_lon-$offset";
+    $sql = "SELECT id, (lat-{$from_lat})*(lat-{$from_lat}) + (lon - {$from_lon})*(lon - {$from_lon}) AS x FROM osm_nodes
+            WHERE lat < $from_lat+$offset AND lat > $from_lat-$offset
+            AND lon < $from_lon+$offset AND lon > $from_lon-$offset
+						ORDER BY x ASC LIMIT 1";
   case "car":
-    $sql = "SELECT * FROM city_connections AS a
-            RIGHT JOIN cities AS b
-            ON a.node_id = b.id
-            WHERE access_drive = 1
-            AND lat < $from_lat+$offset AND lat > $from_lat-$offset
-            AND lon < $from_lon+$offset AND lon > $from_lon-$offset";
+    $sql = "SELECT id, (lat-{$from_lat})*(lat-{$from_lat}) + (lon - {$from_lon})*(lon - {$from_lon}) AS x FROM osm_nodes
+            WHERE lat < $from_lat+$offset AND lat > $from_lat-$offset
+            AND lon < $from_lon+$offset AND lon > $from_lon-$offset
+						ORDER BY x ASC LIMIT 1";
   }
-  $result = $mysqli->query($sql);
-  $closest = INF;
-  $closeNode = new Node;
-  $nodes = [];
-  while ($result && $row = $result->fetch_assoc()) {
-    $node = new Node;
-    $node->id = $row['id'];
-    $node->lat = (float)$row['lat'];
-    $node->lon = (float)$row['lon'];
-//    $node->name = $row['name'];
-    array_push($nodes,$node);
-
-    $dist= distance($from_lat,$from_lon,$node->lat,$node->lon);
-    if ($dist < $closest) {
-      $closest = $dist;
-      $closeNode = $node;
-    }
+	$arr = array();
+  $result =  $mysqli->query($sql);
+  while($result && $row = $result->fetch_assoc()){
+    $arr[] = $row;
   }
-  return $closeNode->id;
+  return $arr[0]['id'];
 }
 
-// Get all neighbour nodes for current node
-function getNeighbours($nodeId, $transport){
-  global $mysqli;
-  // Fetch all neighbours from the database with matching transport
-  switch ($transport){
-  case "foot":
-    $sql = "SELECT node_id, neighbour_id, distance FROM city_connections
-            WHERE node_id = $nodeId
-            AND access_walk = 1";
-  case "bicycle":
-    $sql = "SELECT node_id, neighbour_id, distance FROM city_connections
-            WHERE node_id = $nodeId
-            AND access_bike = 1";
+function costMatrix($transport){
+  $mysqli = initialize_mysql_connection();
+  $costM = array();
+	switch ($transport){
+	case "foot":
+    $distance_info = $mysqli->query("SELECT DISTINCT a.node_id, a.neighbour_id, a.distance from osm_node_neighbours_walk AS a");
+	case "bicycle":
+    $distance_info = $mysqli->query("SELECT DISTINCT a.node_id, a.neighbour_id, a.distance from osm_node_neighbours_cycle AS a");
   case "car":
-    $sql = "SELECT node_id, neighbour_id, distance FROM city_connections
-            WHERE node_id = $nodeId
-            AND access_drive = 1";
+    $distance_info = $mysqli->query("SELECT DISTINCT a.node_id, a.neighbour_id, a.distance from osm_node_neighbours_drive AS a");
   }
-  $result = $mysqli->query($sql);
-  $nodes= [];
-  while ($result && $row = $result->fetch_assoc()) {
-    $node = new Node;
-    $node->to = $row['neighbour_id'];
-    $node->id = $row['node_id'];
-    $node->distance = $row['distance'];
-    array_push($nodes,$node);
+  while($row = $distance_info->fetch_assoc()){
+    $costM[$row['node_id']][$row['neighbour_id']] = $row['distance'];
   }
-  return $nodes;
+  return $costM;
 }
 
-function getVerteces($from_node, $transport){
-  global $mysqli;
-  // Starting node
-  $node = getNode($from_node);
-  // Fetch all neighbours from the database
-  $offset = 0.2;
-  switch ($transport){
-  case "foot":
-    $sql = "SELECT DISTINCT node_id FROM city_connections AS a
-            RIGHT JOIN cities AS b
-            ON a.node_id = b.id
-            WHERE access_walk = 1
-            AND lat < $node->lat+$offset AND lat > $node->lat-$offset
-            AND lon < $node->lon+$offset AND lon > $node->lon-$offset";
-  case "bicycle":
-    $sql = "SELECT DISTINCT node_id FROM city_connections AS a
-            RIGHT JOIN cities AS b
-            ON a.node_id = b.id
-            WHERE access_bike = 1
-            AND lat < $node->lat+$offset AND lat > $node->lat-$offset
-            AND lon < $node->lon+$offset AND lon > $node->lon-$offset";
-  case "car":
-    $sql = "SELECT DISTINCT node_id FROM city_connections AS a
-            RIGHT JOIN cities AS b
-            ON a.node_id = b.id
-            WHERE access_drive = 1
-            AND lat < $node->lat+$offset AND lat > $node->lat-$offset
-            AND lon < $node->lon+$offset AND lon > $node->lon-$offset";
-  }
-  $result = $mysqli->query($sql);
-  $nodes = [];
-  while ($result && $row = $result->fetch_assoc()) {
-    $node = new Node;
-    $node->id = $row['node_id'];
-    array_push($nodes,$node);
-  }
-  return $nodes;
-}
+function getShortestPathDijkstra($a, $b, $transport){
+	// Create costMatrix
+  $_distArr = costMatrix($transport);
+	//initialize the array for storing
+	$S = array();//the nearest path with its parent and weight
+	$Q = array();//the left nodes without the nearest path
+	foreach(array_keys($_distArr) as $val) $Q[$val] = INF;
+	$Q[$a] = 0;
 
-function getShortestPathDijkstra($from_node, $to_node, $transport){
-  global $mysqli;
-  // Variable initialisation
-  $dist = [];
-  $prev = [];
-  $visited = [];
-  $path = [];
-  $verteces = getVerteces($from_node, $transport); // vertex aka node
+	if (!array_key_exists($b, $S)) {
+    echo "Found no way.";
+    return;
+	}
 
-  // Build cost matrix and set distances from source to $vertex to INF
-  foreach($verteces as $vertex){
-    $dist[$vertex->id] = INF;
-  }
-  // Set source -> source to 0 cost
-  $dist[$from_node] = 0;
-  
-  // Searching for the paths
-  while (empty($verteces) == false){
-    // Find minimal distance in subset of verteces
-    $u;
-    $min = INF;
-    foreach ($verteces as $node){
-      if ($dist[$node->id] < $min){
-        $u = $node->id;
-      }
-    }
+	//start calculating
+	while(!empty($Q)){
+			$min = array_search(min($Q), $Q);//the most min weight
+			if($min == $b) break;
+			foreach($_distArr[$min] as $key=>$val) if(!empty($Q[$key]) && $Q[$min] + $val < $Q[$key]) {
+					$Q[$key] = $Q[$min] + $val;
+					$S[$key] = array($min, $Q[$key]);
+			}
+			unset($Q[$min]);
+	}
 
-    // unset vertex matched from u
-    for($i = 0; $i < count($verteces); $i++){
-      if ($verteces[$i]->id == $u){
-        array_push($visited,$verteces[$i]);
-        array_splice($verteces,$i,1);
-        break;
-      }
-    }
-
-    // We only care about source -> target
-    if ($u == $to_node){
-      $u = $to_node;
-      while(isset($prev[$u]) or ($u <> $from_node)){
-        array_push($path,$u);
-        $u = $prev[$u];
-      }
-      break;
-    }
-
-    // Fetch neighbours
-    $neighs = getNeighbours($u,$transport);
-    // Start looking at the neighbours of the node
-    foreach ($neighs as $neigh){
-      $alt = $dist[$u] + $neigh->distance;
-
-      
-
-      if (!isset($dist[$neigh->to])){
-        $new = getNode($neigh->id);
-        $dist[$neigh->to] = INF;
-        print_r($new);
-      //  $new = array_udiff($new, $visited,"compareNodes");
-        array_push($verteces,$new);
-      //  foreach($new as $vertex){
-      //    $dist[$vertex->id] = INF;
-      //  }
-      }
-
-      if ($alt < $dist[$neigh->to]){
-        $dist[$neigh->to] = $alt;
-        $prev[$neigh->to] = $u;
-      }
-    }
-  }
-  print_r($dist);
-  array_push($path,$from_node);
-  $path = array_reverse($path);
-
-  return array($dist[$to_node], $path);
+	//list the path
+	$path = array();
+	$pos = $b;
+	while($pos != $a){
+			$path[] = $pos;
+			$pos = $S[$pos][0];
+	}
+	$path[] = $a;
+	$path = array_reverse($path);
+	
+	return array($S[$to_node][1],$path);
 }
 
 function compareNodes($a, $b){
@@ -300,7 +159,6 @@ function json_dijkstra($from_lat, $from_lon, $to_lat, $to_lon, $transport){
   // which throws an error if no path could be found -> avoid that your algorithm visits all nodes in the database
 
   list($distance,$path) = getShortestPathDijkstra($from_node, $to_node, $transport); // complete implementation in func.php
-  $coords = getCoord($path);
 
   // throw new Exception("Error: ...");
 
@@ -308,7 +166,6 @@ function json_dijkstra($from_lat, $from_lon, $to_lat, $to_lon, $transport){
       "from_node" => $from_node,
       "to_node" => $to_node,
       "path" => $path,
-      "loc" => $coords,
       "distance" => $distance
   );
 
