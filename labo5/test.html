@@ -46,13 +46,12 @@
           step = res.loc[i];
           p = [step.lat,step.lon];
           pa.push(p);
-          L.marker([step.lat,step.lon]).addTo(map).bindPopup("Name:"+step.name
-            +"<br>Id: "+step.id
-            +"<br>Step: "+(i+1)
-            +"<br>Coord: ["+step.lat+","+step.lon+"]");
         }
+        L.polyline(pa).addTo(map);
       }
   };
+
+  console.log(pa);
 
   L.polyline(pa,{color: 'blue'}).addTo(map);
   
