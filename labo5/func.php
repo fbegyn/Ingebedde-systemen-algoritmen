@@ -96,13 +96,18 @@ function costMatrix($transport){
   $costM = array();
   switch ($transport){
   case "foot":
-    $distance_info = $mysqli->query("SELECT DISTINCT a.node_id, a.neighbour_id, a.distance from osm_node_neighbours_walk AS a");
+    $res = $mysqli->query("SELECT DISTINCT a.node_id, a.neighbour_id, a.distance from osm_node_neighbours_walk AS a");
+    break;
   case "bicycle":
-    $distance_info = $mysqli->query("SELECT DISTINCT a.node_id, a.neighbour_id, a.distance from osm_node_neighbours_bike AS a");
+    $res = $mysqli->query("SELECT DISTINCT a.node_id, a.neighbour_id, a.distance from osm_node_neighbours_bike AS a");
+    break;
   case "car":
-    $distance_info = $mysqli->query("SELECT DISTINCT a.node_id, a.neighbour_id, a.distance from osm_node_neighbours_walk AS a");
+    $res = $mysqli->query("SELECT DISTINCT a.node_id, a.neighbour_id, a.distance from osm_node_neighbours_drive AS a");
+    break;
+  default:
+    print_r("Unknown transport mode.\n");
   }
-  while($row = $distance_info->fetch_assoc()){
+  while($res && $row = $res->fetch_assoc()){
     $costM[$row['node_id']][$row['neighbour_id']] = $row['distance'];
   }
   return $costM;
@@ -112,33 +117,53 @@ function getShortestPathDijkstra($a, $b, $transport){
   // Create costMatrix
   $_distArr = costMatrix($transport);
   //initialize the array for storing
-  $S = array();//the nearest path with its parent and weight
-  $Q = array();//the left nodes without the nearest path
-  foreach(array_keys($_distArr) as $val) $Q[$val] = INF;
-  $Q[$a] = 0;
+  $Trail = array();     // Trail with shortest distances to node
+  $Cost = array();      // cost of start -> node
+  $GoalCost = array();  // cost of start -> goal
+
+  $closed = array();
+  $opened = array();
+
+  foreach(array_keys($_distArr) as $val){
+    $Cost[$val] = INF;
+    $GoalCost[$val] = INF;
+  }
+  $Cost[$a] = 0;
 
   // No path exists between nodes, stop
-  if (!array_key_exists($b, $Q)) {
+  if (!array_key_exists($b, $Cost)) {
     return;
   }
 
+  $closed = array();
+
   //start calculating
-  while(!empty($Q)){
-    $min = array_search(min($Q), $Q);//the most min weight
-    if($min == $b) break;
-    foreach($_distArr[$min] as $key=>$val) if(!empty($Q[$key]) && $Q[$min] + $val < $Q[$key]) {
-      $Q[$key] = $Q[$min] + $val;
-      $S[$key] = array($min, $Q[$key]);
-    }
-    unset($Q[$min]);
+  while(!empty($Cost)){
+    $min = array_search(min($Cost), $Cost); // the most min weight
+    if($min == $b) break;                   // If next node is target, stop
+
+    $closed[] = $min;
+
+    foreach($_distArr[$min] as $key=>$val) if(!empty($Cost[$key]) && $Cost[$min] + $val < $Cost[$key]) {
+      if (array_key_exists($val,$closed)) continue;
+      $tentative_Cost = $Cost[$min] + $val; 
+      if (!array_key_exists($val,$closed)) print_r("fetch new node");
+      else if ($tentative_Cost >= $Cost[$key]){
+        $Cost[$key] = $Cost[$min] + $val;
+        $Trail[$key] = array($min, $Cost[$key]);
+        $GoalCost[$key] = $Cost[$key] + 1;
+      }
+    }  
+    unset($Cost[$min]);
+
     // We found the target, time to stop
-    if (array_key_exists($b,$S)){
+    if (array_key_exists($b,$Trail)){
       break;
     }
   }
 
   // No path exists between nodes, stop
-  if (!array_key_exists($b, $S)) {
+  if (!array_key_exists($b, $Trail)) {
     return;
   }
 
@@ -147,16 +172,12 @@ function getShortestPathDijkstra($a, $b, $transport){
   $pos = $b;
   while($pos != $a){
     $path[] = $pos;
-    $pos = $S[$pos][0];
+    $pos = $Trail[$pos][0];
   }
   $path[] = $a;
   $path = array_reverse($path);
 
-  return array($S[$b][1],$path);
-}
-
-function compareNodes($a, $b){
-  return $a === $b ? 0 : -1;
+  return array($Trail[$b][1],$path);
 }
 
 function json_dijkstra($from_lat, $from_lon, $to_lat, $to_lon, $transport){
