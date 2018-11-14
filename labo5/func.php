@@ -72,16 +72,19 @@ function getNodeId($from_lat, $from_lon, $transport){
       WHERE lat < $from_lat+$offset AND lat > $from_lat-$offset
       AND lon < $from_lon+$offset AND lon > $from_lon-$offset
       ORDER BY x ASC LIMIT 1";
+      break;
   case "bicycle":
     $sql = "SELECT id, (lat-{$from_lat})*(lat-{$from_lat}) + (lon - {$from_lon})*(lon - {$from_lon}) AS x FROM osm_road_nodes
       WHERE lat < $from_lat+$offset AND lat > $from_lat-$offset
       AND lon < $from_lon+$offset AND lon > $from_lon-$offset
       ORDER BY x ASC LIMIT 1";
+      break;
   case "car":
     $sql = "SELECT id, (lat-{$from_lat})*(lat-{$from_lat}) + (lon - {$from_lon})*(lon - {$from_lon}) AS x FROM osm_road_nodes
       WHERE lat < $from_lat+$offset AND lat > $from_lat-$offset
       AND lon < $from_lon+$offset AND lon > $from_lon-$offset
       ORDER BY x ASC LIMIT 1";
+      break;
   }
   $arr = array();
   $result =  $mysqli->query($sql);
@@ -97,12 +100,15 @@ function costMatrix($transport){
   switch ($transport){
   case "foot":
     $distance_info = $mysqli->query("SELECT DISTINCT a.node_id, a.neighbour_id, a.distance from osm_node_neighbours_walk AS a");
+    break;
   case "bicycle":
     $distance_info = $mysqli->query("SELECT DISTINCT a.node_id, a.neighbour_id, a.distance from osm_node_neighbours_bike AS a");
+    break;
   case "car":
-    $distance_info = $mysqli->query("SELECT DISTINCT a.node_id, a.neighbour_id, a.distance from osm_node_neighbours_walk AS a");
+    $distance_info = $mysqli->query("SELECT DISTINCT a.node_id, a.neighbour_id, a.distance from osm_node_neighbours_drive AS a");
+    break;
   }
-  while($row = $distance_info->fetch_assoc()){
+  while($distance_info && $row = $distance_info->fetch_assoc()){
     $costM[$row['node_id']][$row['neighbour_id']] = $row['distance'];
   }
   return $costM;
