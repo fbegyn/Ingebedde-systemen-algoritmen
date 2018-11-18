@@ -1,0 +1,38 @@
+body {
+  padding: 0;
+  margin: 0,
+}
+
+html, body #map {
+  height: 50vw;
+  width: 80vw;
+}
+
+.header {
+  grid-area: header;
+  justify-self: center;
+}
+
+.search {
+  grid-area: search;
+  justify-self: left;
+}
+
+.map {
+  grid-area: map;
+}
+
+.footer {
+  grid-area: footer;
+  justify-self: center;
+}
+
+.container {
+  display: grid;
+  grid-template-columns: 50px 200px auto 50px;
+  grid-template-rows: auto;
+  grid-template-areas:
+    "header header header header"
+    "search search map map"
+    "footer footer footer footer";
+}
