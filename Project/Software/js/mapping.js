@@ -9,7 +9,7 @@ map.on('locationfound', onLocationFound);
 map.on('locationerror', onLocationError);
 
 // Add layer with copyright and title
- L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
+ L.tileLayer('https://{s}.tile.osm.org/{z}/{x}/{y}.png', {
     attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
   }).addTo(map);
 
@@ -24,12 +24,11 @@ var node = {
 }
 // Load in the GeoJSON for the bike parkings
 var parkJSON = [];
-jQuery.getJSON("../json/fietsparkingen-gent.geojson").done(
+jQuery.getJSON("json/fietsparkingen-gent.geojson").done(
   function (json){
     L.geoJSON(json,{
       style: function(feature){
         var obj = feature.id.split("/");
-        console.log(obj)
         switch (obj[0]){
           case "way": return poly;
           case "node": return node;
@@ -37,4 +36,3 @@ jQuery.getJSON("../json/fietsparkingen-gent.geojson").done(
       }
     }).addTo(map);
   });
-console.log(parkJSON);

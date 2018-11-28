@@ -4,7 +4,7 @@ body {
 }
 
 html, body #map {
-  height: 50vw;
+  height: 75vw;
   width: 80vw;
 }
 
@@ -29,7 +29,7 @@ html, body #map {
 
 .container {
   display: grid;
-  grid-template-columns: 50px 200px auto 50px;
+  grid-template-columns: 50px 1px auto 50px;
   grid-template-rows: auto;
   grid-template-areas:
     "header header header header"
