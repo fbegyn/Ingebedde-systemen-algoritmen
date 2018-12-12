@@ -2,6 +2,7 @@
   "name": "client",
   "version": "0.1.0",
   "private": true,
+  "homepage": "https://navshare.ugent.be/project4/project",
   "dependencies": {
     "babel": "6.23.0",
     "babel-polyfill": "6.26.0",
@@ -15,6 +16,7 @@
     "react-leaflet-search": "0.6.0",
     "react-scripts": "2.1.1",
     "reactstrap": "6.5.0",
+    "serve": "10.1.1",
     "webpack": "4.19.1"
   },
   "scripts": {

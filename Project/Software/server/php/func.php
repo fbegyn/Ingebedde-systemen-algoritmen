@@ -23,6 +23,17 @@ function initialize_mysql_connection(){
   }
   return $mysqli;
 }
+
+function getPathNodes($path){
+  global $mysqli;
+  $nodes = array();
+  foreach ($path as $n) {
+    $node = getNode($n);
+    $nodes[] = [getNode($n)['lat'],$node['lon']];
+  }
+  return $nodes;
+}
+
 // Graduately close the DB connection
 function close_mysql_connection(){
   global $mysqli;
@@ -73,17 +84,41 @@ function getNode($nodeId){
           WHERE id = $nodeId
           LIMIT 1";
   $result =  $mysqli->query($sql);
+  while($result && $row = $result->fetch_assoc()){
+    $n = $row;
+  }
+  return $n ?? null;
+}
+
+function getNodes($nodeId){
+  global $mysqli;
+  $offset = 0.001;
+  $n = getNode($nodeId);
+  $from_lat = $n['lat'];
+  $from_lon = $n['lon'];
   $nodes = array();
+  $sql = "SELECT id, lat, lon FROM osm_nodes
+          WHERE lat < $from_lat+$offset AND lat > $from_lat-$offset
+          AND lon < $from_lon+$offset AND lon > $from_lon-$offset";
+  $result =  $mysqli->query($sql);
   while($result && $row = $result->fetch_assoc()){
     $nodes[] = $row;
   }
-  return $nodes[0] ?? null;
+  return $nodes;
+}
+
+function getNodeCache($id, $cache){
+  foreach ($cache as $n){
+    if ($n['id'] == $id) {
+      return $n;
+    }
+  }
 }
 
 // Calculate the distance between 2 nodes
-function nodeDist($node1, $node2){
-  $n1 = getNode($node1);
-  $n2 = getNode($node2);
+function nodeDist($node1, $node2, $cache){
+  $n1 = getNodeCache($node1, $cache);
+  $n2 = getNodeCache($node2, $cache);
   return 3*distance($n1['lat'],$n1['lon'],$n2['lat'],$n2['lon']);
 }
 
@@ -92,7 +127,7 @@ function compareNodes($a, $b){
   return $a === $b ? 0 : -1;
 }
 
-// Get the closest node to the lcoation matching th ecurrent transport
+// Get the closest node to the lcoation matching th eminrent transport
 function getNodeId($from_lat, $from_lon, $transport){
   // find the closest node_id to ($from_lat, $from_lon) on a way
   global $mysqli;
@@ -128,16 +163,6 @@ function getNodeId($from_lat, $from_lon, $transport){
   return (int) $arr[0]['id'];
 }
 
-function getNodes($path){
-  global $mysqli;
-  $nodes = array();
-  foreach ($path as $n) {
-    $node = getNode($n);
-    $nodes[] = [getNode($n)['lat'],$node['lon']];
-  }
-  return $nodes;
-}
-
 // Get the neighbours of the node
 function getNeigh($nodeId, $transport){
   global $mysqli;
@@ -160,73 +185,77 @@ function getNeigh($nodeId, $transport){
   return $costM ?? null;
 }
 
-// Build path the cur node based on cameFrom
-function buildPath($cameFrom, $cur){
+// Build path the min node based on cameFrom
+function buildPath($cameFrom, $min){
   $path = array();
-  $path[] = $cur;
-  while(in_array($cur,array_keys($cameFrom))){
-    $cur = $cameFrom[$cur];
-    $path[] = $cur;
+  $path[] = $min;
+  while(in_array($min,array_keys($cameFrom))){
+    $min = $cameFrom[$min];
+    $path[] = $min;
   }
   return array_reverse($path);
 }
 
 // Path finding algorithm
 function getAStar($start, $end, $transport){
-  $endNode = getNode($end);
+  $cache = getNodes($start);
 
+  $endNode = getNode($end);
   $closed = array(); // evaluated nodes
   $open = array(); // discovererd unevaluated nodes
   $open[] = $start;
 
-  $G = array(); // cost of getting from start to $Key
-  $G[$start] = 0;
-  $F = array(); // cost of getting from start to end while passing $key node
-  $F[$start] = nodeDist($start, $end);
+  $G = new stdClass(); // cost of getting from start to $Key
+  $G->$start = 0;
+  $F = new stdClass(); // cost of getting from start to end while passing $key node
+  $F->$start = nodeDist($start, $end, $cache);
 
   $cameFrom = array(); // array that has the most efficient path to the $key
 
   while(!empty($open)){
     $min = array_values($open)[0];
     foreach($open as $v){
-      if($F[$v] < $F[$min]){
+      if($F->$v < $F->$min){
         $min = $v;
       }
     }
-    $cur = $min; // Node with lowest F
-    $closed[] = $cur; // Add node to visited set
+    $closed[] = $min; // Add node to visited set
     // Remove visted node from open set
-    $k = array_search($cur,$open);
+    $k = array_search($min,$open);
     unset($open[$k]);
 
-    // If cur is the end node, reconstruct the path
-    if ($cur == $end) break;
+    // If min is the end node, reconstruct the path
+    if ($min == $end) break;
     // Loop for neighbours
-    $neighs = getNeigh($cur,$transport);
+    $neighs = getNeigh($min,$transport);
     if ($neighs == null){
       break;
     }
     foreach($neighs as $neigh => $dist){
+			//if (!in_array($neigh,$cache)){
+      //  $cache = getNodes($neigh);
+			//}
+
       if (in_array($neigh,$closed)){
         continue;
       }
       // distance from start to neigh
-      $tentG = $G[$cur] + $dist;
+      $tentG = $G->$min + $dist;
       if (!in_array($neigh, $open)) $open[] = $neigh;
-      else if ($tentG >= $G[$neigh]) continue;
+      else if ($tentG >= $G->$neigh) continue;
 
-      $cameFrom[$neigh] = $cur;
-      $G[$neigh] = $tentG;
-      $F[$neigh] = $G[$neigh] + (nodeDist($neigh,$end)*10);
+      $cameFrom[$neigh] = $min;
+      $G->$neigh = $tentG;
+      $F->$neigh = $G->$neigh + (nodeDist($neigh,$end, $cache)*100);
     }
   }
 
   $path = buildPath($cameFrom,$end);
 
-  return array(round($G[$end],4),$path);
+  return array(round($G->$end,4),$path);
 }
 
-function json_dijkstra($from_lat, $from_lon, $to_lat, $to_lon, $transport){
+function json_routing($from_lat, $from_lon, $to_lat, $to_lon, $transport){
   $from_node = getNodeId($from_lat, $from_lon, $transport); // complete implementation in func.php
   $to_node = getNodeId($to_lat, $to_lon, $transport);
 
@@ -236,7 +265,7 @@ function json_dijkstra($from_lat, $from_lon, $to_lat, $to_lon, $transport){
 
   //list($distance,$path) = getShortestPathDijkstra($from_node, $to_node, $transport); // complete implementation in func.php
   list($distance,$path) = getAStar($from_node, $to_node, $transport); // complete implementation in func.php
-  $nodes = getNodes($path);
+  $nodes = getPathNodes($path);
   // throw new Exception("Error: ...");
 
   $output = array(

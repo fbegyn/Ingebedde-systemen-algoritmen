@@ -1,7 +1,5 @@
 import React, { Component, createRef } from 'react';
 import { Map, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
-import { GeoSearchControl, OpenStreetMapProvider } from 'leaflet-geosearch';
-import { Dropdown, DropdownToggle, DropdownMenu, DropdownItem } from 'reactstrap';
 import L from 'leaflet';
 
 import './App.css';
@@ -28,7 +26,7 @@ class App extends Component {
       lng: 3.7300,
     },
     zoom: 4,
-    draggable: false,
+    draggable: true,
     haveUserLocation: false,
     dropdownOpen: false,
     toggle: true
@@ -60,24 +58,75 @@ class App extends Component {
     });
   }
 
-  handleClick = (e) => {
+  getFoot = (e) => {
     fetch("http://localhost:3001/php/routing.php?"
-          +"from_lat=" + this.state.location.lat + "&"
-          +"from_lon=" + this.state.location.lng + "&"
-          +"to_lat=" + e.latlng.lat + "&"
-          +"to_lon=" + e.latlng.lng + "&"
-          +"transport=foot")
-          .then(resp => resp.json())
-          .then(json => {
-            this.setState({
-              route: {
-                path: json.path,
-                nodes: json.nodes,
-                dist: json.distance
-              }
-            });
-            console.log(json);
-          });
+      +"from_lat=" + this.state.location.lat + "&"
+      +"from_lon=" + this.state.location.lng + "&"
+      +"to_lat=" + e.latlng.lat + "&"
+      +"to_lon=" + e.latlng.lng + "&"
+      +"transport=foot")
+      .then(resp => resp.json())
+      .then(json => {
+        this.setState({
+          route: {
+            foot: {
+              path: json.path,
+              nodes: json.nodes,
+              dist: json.distance
+            }
+          }
+        });
+        console.log(json);
+      });
+  }
+  getBike = (e) => {
+    fetch("http://localhost:3001/php/routing.php?"
+      +"from_lat=" + this.state.location.lat + "&"
+      +"from_lon=" + this.state.location.lng + "&"
+      +"to_lat=" + e.latlng.lat + "&"
+      +"to_lon=" + e.latlng.lng + "&"
+      +"transport=bicycle")
+      .then(resp => resp.json())
+      .then(json => {
+        this.setState({
+          route: {
+            bike: {
+              path: json.path,
+              nodes: json.nodes,
+              dist: json.distance
+            }
+          }
+        });
+        console.log(json);
+      });
+  }
+  getDrive = (e) => {
+    fetch("http://localhost:3001/php/routing.php?"
+      +"from_lat=" + this.state.location.lat + "&"
+      +"from_lon=" + this.state.location.lng + "&"
+      +"to_lat=" + e.latlng.lat + "&"
+      +"to_lon=" + e.latlng.lng + "&"
+      +"transport=car")
+      .then(resp => resp.json())
+      .then(json => {
+        this.setState({
+          route: {
+            car: {
+              path: json.path,
+              nodes: json.nodes,
+              dist: json.distance
+            }
+          }
+        });
+        console.log(json);
+      });
+  }
+
+  handleClick = (e) => {
+    console.log(this.state);
+    this.getFoot(e);
+   // this.getBike(e);
+   // this.getDrive(e);
     this.setState({
       latlng: {
         lat: e.latlng.lat,
@@ -86,25 +135,11 @@ class App extends Component {
     });
   }
 
-  createLeafletElement() {
-    return GeoSearchControl({
-      provider: new OpenStreetMapProvider(),
-      style: 'bar',
-      showMarker: true,
-      showPopup: false,
-      autoClose: true,
-      retainZoomLevel: false,
-      animateZoom: true,
-      keepResult: false,
-      searchLabel: 'search'
-    });
-  }
-
   updatePosition = () => {
     const marker = this.refmarker.current
     if (marker != null) {
       this.setState({
-        marker: marker.leafletElement.getLatLng(),
+        location: marker.leafletElement.getLatLng(),
       })
     }
   }
@@ -112,7 +147,6 @@ class App extends Component {
   render() {
     const position = [this.state.center.lat, this.state.center.lng]
     const markerPosition = [this.state.location.lat, this.state.location.lng]
-    this.leafletElement = this.createLeafletElement()
     return (
       <div className="map">
         <Map
@@ -127,21 +161,21 @@ class App extends Component {
         />
         {
           this.state.route ?
-          this.state.route.nodes ?
-          this.state.route.nodes.length ?
           <div>
-          <Polyline color="lime" positions={this.state.route.nodes} />
+          this.state.route.foot ?
+          <Polyline color="lime" positions={this.state.route.foot.nodes ? this.state.route.foot.nodes : null} /> : ''
+          </div>
+          : ''
+        }
+        {
+          this.state.latlng ?
           <Marker
             icon={myIcon}
-            position={this.state.route.nodes[this.state.route.nodes.length-1]}>
+            position={this.state.latlng}>
             <Popup minWidth={90}>
               Destination point
             </Popup>
-          </Marker>
-          </div>
-          : ''
-          : ''
-          : ''
+          </Marker> : ''
         }
         {
           this.state.haveUserLocation ?
