@@ -205,17 +205,17 @@ function getAStar($start, $end, $transport){
   $open = array(); // discovererd unevaluated nodes
   $open[] = $start;
 
-  $G = new stdClass(); // cost of getting from start to $Key
-  $G->$start = 0;
-  $F = new stdClass(); // cost of getting from start to end while passing $key node
-  $F->$start = nodeDist($start, $end, $cache);
+  $G = array(); // cost of getting from start to $Key
+  $G[$start] = 0;
+  $F = array(); // cost of getting from start to end while passing $key node
+  $F[$start] = nodeDist($start, $end, $cache);
 
   $cameFrom = array(); // array that has the most efficient path to the $key
 
   while(!empty($open)){
     $min = array_values($open)[0];
     foreach($open as $v){
-      if($F->$v < $F->$min){
+      if($F[$v] < $F[$min]){
         $min = $v;
       }
     }
@@ -240,19 +240,19 @@ function getAStar($start, $end, $transport){
         continue;
       }
       // distance from start to neigh
-      $tentG = $G->$min + $dist;
+      $tentG = $G[$min] + $dist;
       if (!in_array($neigh, $open)) $open[] = $neigh;
-      else if ($tentG >= $G->$neigh) continue;
+      else if ($tentG >= $G[$neigh]) continue;
 
       $cameFrom[$neigh] = $min;
-      $G->$neigh = $tentG;
-      $F->$neigh = $G->$neigh + (nodeDist($neigh,$end, $cache)*100);
+      $G[$neigh] = $tentG;
+      $F[$neigh] = $G[$neigh] + (nodeDist($neigh,$end, $cache)*100);
     }
   }
 
   $path = buildPath($cameFrom,$end);
 
-  return array(round($G->$end,4),$path);
+  return array(round($G[$end],4),$path);
 }
 
 function json_routing($from_lat, $from_lon, $to_lat, $to_lon, $transport){

@@ -156,14 +156,14 @@ class App extends Component {
         onClick={this.handleClick}>
         <TileLayer
           attribution='&amp;copy <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
-          //url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          url='https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          //url='https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
         />
         {
           this.state.route ?
           <div>
           this.state.route.foot ?
-          <Polyline color="lime" positions={this.state.route.foot.nodes ? this.state.route.foot.nodes : null} /> : ''
+          <Polyline color="blue" positions={this.state.route.foot.nodes ? this.state.route.foot.nodes : null} /> : ''
           </div>
           : ''
         }
