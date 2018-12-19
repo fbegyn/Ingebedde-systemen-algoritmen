@@ -21,15 +21,12 @@ class App extends Component {
       lat: 51.046,
       lng: 3.7300,
     },
-    latlng: {
-      lat: 51.046,
-      lng: 3.7300,
-    },
     zoom: 4,
     draggable: true,
     haveUserLocation: false,
     dropdownOpen: false,
-    toggle: true
+    toggle: true,
+    route: null
   }
   refmarker = createRef()
 
@@ -58,7 +55,7 @@ class App extends Component {
     });
   }
 
-  getFoot = (e) => {
+  getFoot(e) {
     fetch("http://localhost:3001/php/routing.php?"
       +"from_lat=" + this.state.location.lat + "&"
       +"from_lon=" + this.state.location.lng + "&"
@@ -68,18 +65,16 @@ class App extends Component {
       .then(resp => resp.json())
       .then(json => {
         this.setState({
-          route: {
-            foot: {
-              path: json.path,
-              nodes: json.nodes,
-              dist: json.distance
-            }
-          }
+           foot: {
+            path: json.path,
+            nodes: json.nodes,
+            dist: json.distance
+           }
         });
-        console.log(json);
       });
   }
-  getBike = (e) => {
+
+  getBike(e) {
     fetch("http://localhost:3001/php/routing.php?"
       +"from_lat=" + this.state.location.lat + "&"
       +"from_lon=" + this.state.location.lng + "&"
@@ -89,18 +84,16 @@ class App extends Component {
       .then(resp => resp.json())
       .then(json => {
         this.setState({
-          route: {
-            bike: {
-              path: json.path,
-              nodes: json.nodes,
-              dist: json.distance
-            }
-          }
+           bike: {
+            path: json.path,
+            nodes: json.nodes,
+            dist: json.distance
+           }
         });
-        console.log(json);
       });
   }
-  getDrive = (e) => {
+
+  getDrive(e) {
     fetch("http://localhost:3001/php/routing.php?"
       +"from_lat=" + this.state.location.lat + "&"
       +"from_lon=" + this.state.location.lng + "&"
@@ -110,23 +103,19 @@ class App extends Component {
       .then(resp => resp.json())
       .then(json => {
         this.setState({
-          route: {
-            car: {
-              path: json.path,
-              nodes: json.nodes,
-              dist: json.distance
-            }
+          car: {
+            path: json.path,
+            nodes: json.nodes,
+            dist: json.distance
           }
         });
-        console.log(json);
       });
   }
 
   handleClick = (e) => {
-    console.log(this.state);
     this.getFoot(e);
-   // this.getBike(e);
-   // this.getDrive(e);
+    this.getBike(e);
+    this.getDrive(e);
     this.setState({
       latlng: {
         lat: e.latlng.lat,
@@ -159,14 +148,20 @@ class App extends Component {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           //url='https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
         />
-        {
-          this.state.route ?
           <div>
-          this.state.route.foot ?
-          <Polyline color="blue" positions={this.state.route.foot.nodes ? this.state.route.foot.nodes : null} /> : ''
+          {
+          this.state.foot ?
+          <Polyline color="blue" positions={this.state.foot.nodes ? this.state.foot.nodes : null} /> : ''
+          }
+          {
+          this.state.bike ?
+          <Polyline color="green" positions={this.state.bike.nodes ? this.state.bike.nodes : null} /> : ''
+          }
+          {
+          this.state.car ?
+          <Polyline color="red" positions={this.state.car.nodes ? this.state.car.nodes : null} /> : ''
+          }
           </div>
-          : ''
-        }
         {
           this.state.latlng ?
           <Marker
@@ -188,6 +183,8 @@ class App extends Component {
             ref={this.refmarker}>
             <Popup minWidth={90}>
               Start location
+                this.state.foot ?
+                "Foot = this.state.foot.distance" : ''
             </Popup>
           </Marker> : ''
         }

@@ -92,7 +92,7 @@ function getNode($nodeId){
 
 function getNodes($nodeId){
   global $mysqli;
-  $offset = 0.001;
+  $offset = 0.01;
   $n = getNode($nodeId);
   $from_lat = $n['lat'];
   $from_lon = $n['lon'];
@@ -116,9 +116,16 @@ function getNodeCache($id, $cache){
 }
 
 // Calculate the distance between 2 nodes
-function nodeDist($node1, $node2, $cache){
-  $n1 = getNodeCache($node1, $cache);
-  $n2 = getNodeCache($node2, $cache);
+function nodeDistCache($node1, $node2, $cache){
+  $n1 = getNode($node1, $cache);
+  $n2 = getNode($node2, $cache);
+  return 3*distance($n1['lat'],$n1['lon'],$n2['lat'],$n2['lon']);
+}
+
+// Calculate the distance between 2 nodes
+function nodeDist($node1, $node2){
+  $n1 = getNode($node1);
+  $n2 = getNode($node2);
   return 3*distance($n1['lat'],$n1['lon'],$n2['lat'],$n2['lon']);
 }
 
@@ -127,31 +134,28 @@ function compareNodes($a, $b){
   return $a === $b ? 0 : -1;
 }
 
-// Get the closest node to the lcoation matching th eminrent transport
+// Get the closest node to the lcoation matching the current transport
 function getNodeId($from_lat, $from_lon, $transport){
   // find the closest node_id to ($from_lat, $from_lon) on a way
   global $mysqli;
-  $offset = 0.00069;
+  $offset = 0.01;
   switch ($transport){
   case "foot":
-    $sql = "SELECT id, (lat-{$from_lat})*(lat-{$from_lat}) + (lon - {$from_lon})*(lon - {$from_lon}) AS x FROM osm_node_neighbours_2
+    $sql = "SELECT id, (lat-{$from_lat})*(lat-{$from_lat}) + (lon - {$from_lon})*(lon - {$from_lon}) AS x FROM osm_road_nodes
       WHERE lat < $from_lat+$offset AND lat > $from_lat-$offset
       AND lon < $from_lon+$offset AND lon > $from_lon-$offset
-      AND access_walk = 1
       ORDER BY x ASC LIMIT 1";
       break;
   case "bicycle":
-    $sql = "SELECT id, (lat-{$from_lat})*(lat-{$from_lat}) + (lon - {$from_lon})*(lon - {$from_lon}) AS x FROM osm_node_neighbours_2
+    $sql = "SELECT id, (lat-{$from_lat})*(lat-{$from_lat}) + (lon - {$from_lon})*(lon - {$from_lon}) AS x FROM osm_road_nodes
       WHERE lat < $from_lat+$offset AND lat > $from_lat-$offset
       AND lon < $from_lon+$offset AND lon > $from_lon-$offset
-      AND access_bike = 1
       ORDER BY x ASC LIMIT 1";
       break;
   case "car":
-    $sql = "SELECT id, (lat-{$from_lat})*(lat-{$from_lat}) + (lon - {$from_lon})*(lon - {$from_lon}) AS x FROM osm_node_neighbours_2
+    $sql = "SELECT id, (lat-{$from_lat})*(lat-{$from_lat}) + (lon - {$from_lon})*(lon - {$from_lon}) AS x FROM osm_road_nodes
       WHERE lat < $from_lat+$offset AND lat > $from_lat-$offset
       AND lon < $from_lon+$offset AND lon > $from_lon-$offset
-      AND access_drive = 1
       ORDER BY x ASC LIMIT 1";
       break;
   }
@@ -161,6 +165,36 @@ function getNodeId($from_lat, $from_lon, $transport){
     $arr[] = $row;
   }
   return (int) $arr[0]['id'];
+}
+
+// Get the closest node to the lcoation matching th eminrent transport
+function getBikeParkLoc($from_lat, $from_lon){
+  // find the closest node_id to ($from_lat, $from_lon) on a way
+  global $mysqli;
+  $offset = 0.1;
+  $sql = "SELECT node_id, lat, lon, (lat-{$from_lat})*(lat-{$from_lat}) + (lon - {$from_lon})*(lon - {$from_lon}) AS x FROM osm_bike_parkings
+    ORDER BY x ASC LIMIT 1";
+  $arr = array();
+  $result =  $mysqli->query($sql);
+  while($result && $row = $result->fetch_assoc()){
+    $arr[] = array($row['lat'],$row['lon']);
+  }
+  return $arr[0];
+}
+
+// Get the closest node to the lcoation matching th eminrent transport
+function getCarParkLoc($from_lat, $from_lon){
+  // find the closest node_id to ($from_lat, $from_lon) on a way
+  global $mysqli;
+  $offset = 0.1;
+  $sql = "SELECT node_id, lat, lon, (lat-{$from_lat})*(lat-{$from_lat}) + (lon - {$from_lon})*(lon - {$from_lon}) AS x FROM osm_car_parkings
+    ORDER BY x ASC LIMIT 1";
+  $arr = array();
+  $result =  $mysqli->query($sql);
+  while($result && $row = $result->fetch_assoc()){
+    $arr[] = array($row['lat'],$row['lon']);
+  }
+  return $arr[0];
 }
 
 // Get the neighbours of the node
@@ -198,7 +232,7 @@ function buildPath($cameFrom, $min){
 
 // Path finding algorithm
 function getAStar($start, $end, $transport){
-  $cache = getNodes($start);
+  //$cache = getNodes($start);
 
   $endNode = getNode($end);
   $closed = array(); // evaluated nodes
@@ -208,7 +242,7 @@ function getAStar($start, $end, $transport){
   $G = array(); // cost of getting from start to $Key
   $G[$start] = 0;
   $F = array(); // cost of getting from start to end while passing $key node
-  $F[$start] = nodeDist($start, $end, $cache);
+  $F[$start] = nodeDist($start, $end);
 
   $cameFrom = array(); // array that has the most efficient path to the $key
 
@@ -246,19 +280,35 @@ function getAStar($start, $end, $transport){
 
       $cameFrom[$neigh] = $min;
       $G[$neigh] = $tentG;
-      $F[$neigh] = $G[$neigh] + (nodeDist($neigh,$end, $cache)*100);
+      $F[$neigh] = $G[$neigh] + (nodeDist($neigh,$end)*100);
     }
   }
 
   $path = buildPath($cameFrom,$end);
-
   return array(round($G[$end],4),$path);
 }
 
 function json_routing($from_lat, $from_lon, $to_lat, $to_lon, $transport){
   $from_node = getNodeId($from_lat, $from_lon, $transport); // complete implementation in func.php
-  $to_node = getNodeId($to_lat, $to_lon, $transport);
 
+  switch ($transport){
+  case "foot":
+    $to_node = getNodeId($to_lat, $to_lon, $transport); // complete implementation in func.php
+    break;
+  case "bicycle":
+    $bikeRack = getBikeParkLoc($to_lat, $to_lon);
+    $to_node = getNodeId($bikeRack[0],$bikeRack[1], $transport);
+    //$to_node = getNodeId($to_lat, $to_lon, $transport); // complete implementation in func.php
+    break;
+  case "car":
+    $carPark = getCarParkLoc($to_lat, $to_lon);
+    $to_node = getNodeId($carPark[0],$carPark[1], $transport);
+    //$to_node = getNodeId($to_lat, $to_lon, $transport); // complete implementation in func.php
+    break;
+  default:
+    $to_node = getNodeId($to_lat, $to_lon, $transport); // complete implementation in func.php
+    break;
+  }
   // To think about: what if there is no path between from_node and to_node?
   // add a piece of code here (after you have a working Dijkstra implementation)
   // which throws an error if no path could be found -> avoid that your algorithm visits all nodes in the database
